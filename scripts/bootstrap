@@ -1,0 +1,218 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+REPO_URL="https://github.com/rustip/nix-training.git"
+DOT_DIR="$HOME/.nix-config"
+
+prompt_yn() {
+  local message="$1"
+  read -r -p "$message [y/N]: " response
+  [[ "$response" =~ ^[Yy](es)?$ ]]
+}
+
+nix_git() {
+  nix --experimental-features 'nix-command flakes' run "nixpkgs#git" -- "$@"
+}
+
+cmd_check() {
+  if ! command -v "$1" &>/dev/null; then
+    echo "Error: '$1' is required but not found in PATH."
+    exit 1
+  fi
+}
+
+dir_exists() {
+  [[ -d "$1" ]]
+}
+
+readonly GREEN='\033[0;32m'
+readonly YELLOW='\033[0;33m'
+readonly RED='\033[0;31m'
+readonly NC='\033[0m'
+
+log() {
+  echo -e "${GREEN}$1${NC}"
+}
+
+warn() {
+  echo -e "${YELLOW}$1${NC}"
+}
+
+die() {
+  echo -e "${RED}Error: $1${NC}"
+  exit 1
+}
+
+completion_info() {
+  local host
+  host=$(get_configured_host)
+  echo ""
+  echo "Setup complete!"
+  echo ""
+  echo "Next steps:"
+  echo "  - Review and edit $DOT_DIR/nix/vars.nix"
+  echo "  - Review and edit $DOT_DIR/nix/host/configuration.nix"
+  echo "  - Run: sudo nixos-rebuild switch --flake path:$DOT_DIR#$host"
+  echo ""
+}
+
+ensure_repository() {
+  if dir_exists "$DOT_DIR"; then
+    warn "Repository already exists at $DOT_DIR. Skipping clone."
+    return 0
+  fi
+
+  echo "Cloning repository to $DOT_DIR..."
+  $GIT clone "$REPO_URL" "$DOT_DIR" || die "Error: Failed to clone repository."
+}
+
+check_rebuild_prerequisites() {
+  cmd_check nix
+  cmd_check nixos-rebuild
+}
+
+get_configured_host() {
+  if [[ -f "$DOT_DIR/nix/vars.nix" ]] && command -v nix &>/dev/null; then
+    (
+      cd "$DOT_DIR"
+      nix eval --impure --expr 'builtins.getAttr "hostname" (import ./nix/vars.nix)' --raw 2>/dev/null
+    ) && return
+  fi
+
+  hostname
+}
+
+generate_vars() {
+  if [[ ! -f "$DOT_DIR/nix/vars.nix" ]]; then
+    username=$(whoami)
+    homeDirectory="$HOME"
+    host=$(hostname)
+
+    echo "Generating vars.nix..."
+    cat >"$DOT_DIR/nix/vars.nix" <<EOF
+{
+  username = "$username";
+  homeDirectory = "$homeDirectory";
+  hostname = "$host";
+}
+EOF
+    echo "vars.nix generated for user '$username' on host '$host'."
+  else
+    warn "vars.nix already exists, skipping generation."
+  fi
+
+}
+
+copy_configuration() {
+  if [[ ! -f "$DOT_DIR/nix/host/configuration.nix" ]]; then
+    if [[ -d /etc/nixos && "$(ls -A /etc/nixos/ 2>/dev/null)" ]]; then
+      echo "Copying NixOS configuration from /etc/nixos..."
+      mkdir -p "$DOT_DIR/nix/host"
+      cp -rn /etc/nixos/* "$DOT_DIR/nix/host/" 2>/dev/null || warn "Some files from /etc/nixos already exist in $DOT_DIR/nix/host/ and were skipped."
+    else
+      die "/etc/nixos is empty or does not exist. Skipping configuration copy."
+    fi
+  fi
+}
+
+rebuild_nixos() {
+  if prompt_yn "Rebuild NixOS configuration?"; then
+    local host
+    host=$(get_configured_host)
+    echo "Running sudo nixos-rebuild switch..."
+    sudo nixos-rebuild switch --flake "path:$DOT_DIR#$host"
+  else
+    echo "Skipping NixOS rebuild."
+  fi
+}
+
+help() {
+  echo "Usage: $0 [options]"
+  echo "Options:"
+  echo "  --no-rebuild       Skip NixOS rebuild"
+  echo "  --no-vars          Skip vars generation"
+  echo "  --no-configuration Skip copying configuration from /etc/nixos"
+  echo "  --vars-only     Generate vars and exit"
+  echo "  --rebuild-only  Rebuild NixOS and exit"
+}
+
+parse_args() {
+  while [[ $# -gt 0 ]]; do
+    case $1 in
+    --no-rebuild)
+      NO_REBUILD=1
+      ;;
+    --no-vars)
+      NO_VARS=1
+      ;;
+    --no-configuration)
+      NO_CONFIGURATION=1
+      ;;
+    --help)
+      help
+      exit 0
+      ;;
+    --vars-only)
+      MODE="vars-only"
+      ;;
+    --rebuild-only)
+      MODE="rebuild-only"
+      ;;
+    *)
+      die "Unknown argument: $1"
+      ;;
+    esac
+    shift
+  done
+}
+
+main_init() {
+  if ! command -v git &>/dev/null; then
+    if command -v nix &>/dev/null; then
+      GIT="nix_git"
+    else
+      die "git not found in PATH and nix is also not available."
+    fi
+  else
+    GIT="git"
+  fi
+}
+
+main() {
+  NO_REBUILD=0
+  NO_VARS=0
+  NO_CONFIGURATION=0
+  MODE="full"
+  parse_args "$@"
+  main_init
+  ensure_repository
+
+  case "$MODE" in
+  vars-only)
+    generate_vars
+    exit 0
+    ;;
+  rebuild-only)
+    check_rebuild_prerequisites
+    rebuild_nixos
+    exit 0
+    ;;
+  esac
+
+  if [[ "$NO_VARS" -eq 0 ]]; then
+    generate_vars
+  fi
+  if [[ "$NO_CONFIGURATION" -eq 0 ]]; then
+    copy_configuration
+  fi
+
+  if [[ "$NO_REBUILD" -eq 0 ]]; then
+    check_rebuild_prerequisites
+    rebuild_nixos
+  fi
+
+  completion_info
+}
+
+main "$@"

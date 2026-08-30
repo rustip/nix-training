@@ -1,0 +1,154 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+IMAGE="docker.io/library/ubuntu:26.04"
+BOXES_DIR="$HOME/.boxes"
+
+readonly GREEN='\033[0;32m'
+readonly YELLOW='\033[0;33m'
+readonly RED='\033[0;31m'
+readonly NC='\033[0m'
+
+log() {
+  echo -e "${GREEN}$1${NC}"
+}
+
+warn() {
+  echo -e "${YELLOW}$1${NC}"
+}
+
+die() {
+  echo -e "${RED}Error: $1${NC}" >&2
+  exit 1
+}
+
+cmd_check() {
+  command -v "$1" &>/dev/null || die "'$1' is required but not found in PATH."
+}
+
+list_boxes() {
+  podman ps -a --filter label=manager=distrobox --format '{{.Names}}' 2>/dev/null ||
+    distrobox list --no-color 2>/dev/null | awk -F'|' 'NR>1 {gsub(/ /, "", $2); print $2}'
+}
+
+box_exists() {
+  list_boxes | grep -qx "$1"
+}
+
+pick_box() {
+  local boxes
+  boxes=$(list_boxes)
+  [[ -n "$boxes" ]] || die "No boxes found. Create one with: box create <name>"
+
+  if command -v fzf &>/dev/null && [[ -t 0 ]] && [[ -t 1 ]]; then
+    printf '%s\n' "$boxes" | fzf --height=40% --prompt="box> " --exit-0
+  else
+    printf '%s\n' "$boxes"
+    read -r -p "Select box: " choice
+    echo "$choice"
+  fi
+}
+
+resolve_box() {
+  local name="$1"
+  [[ -n "$name" ]] || die "Missing box name. Usage: box $CMD <name>"
+  box_exists "$name" || die "Box '$name' does not exist. Run: box list"
+  echo "$name"
+}
+
+cmd_create() {
+  local name="${1:-}"
+  [[ -n "$name" ]] || die "Usage: box create <name>"
+  shift || true
+
+  if box_exists "$name"; then
+    die "Box '$name' already exists."
+  fi
+
+  mkdir -p "$BOXES_DIR/$name"
+  log "Creating box '$name' from $IMAGE with init..."
+  distrobox create \
+    --name "$name" \
+    --image "$IMAGE" \
+    --init \
+    --hostname "$name" \
+    --home "$BOXES_DIR/$name" \
+    --yes
+  cmd_enter "$name" "$@"
+}
+
+cmd_enter() {
+  local name
+  name=$(resolve_box "${1:-}") || exit 1
+  [[ $# -gt 0 ]] && shift
+  cd "$BOXES_DIR/$name" 2>/dev/null || die "Box home $BOXES_DIR/$name not found."
+  exec distrobox enter "$name" --clean-path "$@"
+}
+
+cmd_list() {
+  printf '%-14s | %-20s | %-18s | %s\n' "ID" "NAME" "STATUS" "IMAGE"
+  podman ps -a --filter label=manager=distrobox --format '{{.ID}}|{{.Names}}|{{.State}}|{{.Image}}' |
+    while IFS='|' read -r id name state image; do
+      printf '%-14.12s | %-20s | %-18s | %s\n' "$id" "$name" "$state" "$image"
+    done
+}
+
+cmd_rm() {
+  local name
+  if [[ $# -eq 0 ]]; then
+    name=$(pick_box) || exit 0
+    [[ -n "$name" ]] || exit 0
+  else
+    name=$(resolve_box "$1") || exit 1
+  fi
+  log "Removing box '$name'..."
+  distrobox rm --force "$name"
+
+  if [[ -d "$BOXES_DIR/$name" ]] && [[ -z "$(ls -A "$BOXES_DIR/$name" 2>/dev/null)" ]]; then
+    rmdir "$BOXES_DIR/$name"
+  fi
+}
+
+help() {
+  cat <<EOF
+Usage: box <command> [args]
+
+Commands:
+  create <name>   Create an $IMAGE box with init, home at $BOXES_DIR/<name>, then enter it
+  enter [name]    Enter a box (picked with fzf if omitted)
+  list            List boxes
+  rm [name]       Remove a box (picked with fzf if omitted)
+  help            Show this help
+EOF
+}
+
+main() {
+  cmd_check distrobox
+
+  CMD="${1:-help}"
+  shift || true
+
+  case "$CMD" in
+  create)
+    cmd_create "$@"
+    ;;
+  enter)
+    cmd_enter "$@"
+    ;;
+  list | ls)
+    cmd_list
+    ;;
+  rm)
+    cmd_rm "$@"
+    ;;
+  help | -h | --help)
+    help
+    ;;
+  *)
+    die "Unknown command: $CMD. Run: box help"
+    ;;
+  esac
+}
+
+main "$@"

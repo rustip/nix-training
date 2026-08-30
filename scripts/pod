@@ -1,0 +1,232 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+readonly GREEN='\033[0;32m'
+readonly YELLOW='\033[0;33m'
+readonly RED='\033[0;31m'
+readonly NC='\033[0m'
+
+log() {
+  echo -e "${GREEN}$1${NC}"
+}
+
+warn() {
+  echo -e "${YELLOW}$1${NC}"
+}
+
+die() {
+  echo -e "${RED}Error: $1${NC}" >&2
+  exit 1
+}
+
+cmd_check() {
+  command -v "$1" &>/dev/null || die "'$1' is required but not found in PATH."
+}
+
+list_pods() {
+  podman pod ps --format '{{.Name}}' 2>/dev/null | grep -v '^$' || true
+}
+
+pod_exists() {
+  podman pod exists "$1" &>/dev/null
+}
+
+list_containers() {
+  local pod="$1"
+  podman ps -a --filter "pod=$pod" --format '{{.Names}}' 2>/dev/null | grep -v -- '-infra$' || true
+}
+
+pick_from() {
+  local prompt="$1" items="$2"
+  [[ -n "$items" ]] || die "$3"
+
+  if command -v fzf &>/dev/null && [[ -t 0 ]] && [[ -t 1 ]]; then
+    printf '%s\n' "$items" | fzf --height=40% --prompt="$prompt" --exit-0
+  else
+    printf '%s\n' "$items"
+    read -r -p "Select: " choice
+    echo "$choice"
+  fi
+}
+
+resolve_pod() {
+  local name="$1"
+  [[ -n "$name" ]] || die "Missing pod name. Usage: pod $CMD <name>"
+  pod_exists "$name" || die "Pod '$name' does not exist. Run: pod ps"
+  echo "$name"
+}
+
+resolve_or_pick_pod() {
+  local name="${1:-}"
+  if [[ -n "$name" ]]; then
+    resolve_pod "$name"
+  else
+    pick_from "pod> " "$(list_pods)" "No pods found. Create one with: pod new <name>"
+  fi
+}
+
+resolve_or_pick_container() {
+  local pod="$1" name="${2:-}"
+  if [[ -n "$name" ]]; then
+    echo "$name"
+  else
+    pick_from "$pod> " "$(list_containers "$pod")" "No containers in pod '$pod'. Add one with: pod run $pod <image>"
+  fi
+}
+
+unique_container_name() {
+  local pod="$1" base="$2" name="${1}-${2}" i=2
+  while podman container exists "$name" &>/dev/null; do
+    name="$pod-$base-$i"
+    i=$((i + 1))
+  done
+  echo "$name"
+}
+
+cmd_new() {
+  local name="${1:-}"
+  [[ -n "$name" ]] || die "Usage: pod new <name> [-p host:container-port]..."
+  shift
+  pod_exists "$name" && die "Pod '$name' already exists."
+  log "Creating pod '$name'..."
+  podman pod create --name "$name" "$@"
+  log "Done. Add containers with: pod run $name <image>"
+}
+
+cmd_run() {
+  local pod="${1:-}" image="${2:-}"
+  [[ -n "$pod" && -n "$image" ]] || die "Usage: pod run <pod> <image> [cmd...]"
+  pod_exists "$pod" || die "Pod '$pod' does not exist. Run: pod new $pod"
+  shift 2
+
+  local base name
+  base="${image##*/}"
+  base="${base%%:*}"
+  base="${base//[^a-zA-Z0-9_.-]/-}"
+  name=$(unique_container_name "$pod" "$base")
+
+  log "Starting '$name' in pod '$pod'..."
+  podman run -d --pod "$pod" --name "$name" "$image" "$@"
+  podman ps --filter "name=$name" --format 'table {{.Names}}\t{{.Status}}\t{{.Ports}}'
+}
+
+cmd_sh() {
+  local pod container
+  pod=$(resolve_or_pick_pod "${1:-}") || exit 0
+  [[ $# -gt 0 ]] && shift
+  container=$(resolve_or_pick_container "$pod" "${1:-}") || exit 0
+
+  if podman exec "$container" bash -c true &>/dev/null; then
+    exec podman exec -it "$container" bash
+  fi
+  exec podman exec -it "$container" sh
+}
+
+cmd_logs() {
+  local pod container
+  pod=$(resolve_or_pick_pod "${1:-}") || exit 0
+  [[ $# -gt 0 ]] && shift
+  container=$(resolve_or_pick_container "$pod" "${1:-}") || exit 0
+  [[ $# -gt 0 ]] && shift
+
+  exec podman logs "$@" "$container"
+}
+
+cmd_ps() {
+  printf '%-20s | %-12s | %-10s | %s\n' "NAME" "STATUS" "CONTAINERS" "CREATED"
+  podman pod ps --format '{{.Name}}|{{.Status}}|{{.NumberOfContainers}}|{{.Created}}' |
+    while IFS='|' read -r name status count created; do
+      printf '%-20s | %-12s | %-10s | %s\n' "$name" "${status%%,*}" "$count" "$created"
+    done
+}
+
+cmd_stop() {
+  local pod
+  pod=$(resolve_or_pick_pod "${1:-}") || exit 0
+  log "Stopping pod '$pod'..."
+  podman pod stop "$pod"
+}
+
+cmd_start() {
+  local pod
+  pod=$(resolve_or_pick_pod "${1:-}") || exit 0
+  log "Starting pod '$pod'..."
+  podman pod start "$pod"
+}
+
+cmd_rm() {
+  local pod
+  pod=$(resolve_or_pick_pod "${1:-}") || exit 0
+  log "Removing pod '$pod' (and its containers)..."
+  podman pod rm --force "$pod"
+}
+
+help() {
+  cat <<EOF
+Usage: pod <command> [args]
+
+Simple podman pod workflow for development.
+
+Commands:
+  new <name> [args]        Create a pod (extra args go to podman, e.g. -p 8080:80)
+  run <pod> <image> [cmd]  Run a container inside a pod (detached, auto-named)
+  sh [pod] [container]     Shell into a container (fzf pickers if omitted)
+  logs [pod] [container]   Container logs (extra args go to podman logs, e.g. -f)
+  ps                       List pods
+  stop [pod]               Stop a pod
+  start [pod]              Start a pod
+  rm [pod]                 Remove a pod and its containers
+  help                     Show this help
+
+Examples:
+  pod new dev -p 8080:80
+  pod run dev docker.io/library/postgres:18
+  pod run dev docker.io/library/nginx:stable
+  pod logs dev nginx -f
+  pod sh dev
+EOF
+}
+
+main() {
+  cmd_check podman
+  cmd_check fzf
+
+  CMD="${1:-help}"
+  shift || true
+
+  case "$CMD" in
+  new | create)
+    cmd_new "$@"
+    ;;
+  run)
+    cmd_run "$@"
+    ;;
+  sh | exec)
+    cmd_sh "$@"
+    ;;
+  logs)
+    cmd_logs "$@"
+    ;;
+  ps | list)
+    cmd_ps
+    ;;
+  stop)
+    cmd_stop "$@"
+    ;;
+  start)
+    cmd_start "$@"
+    ;;
+  rm)
+    cmd_rm "$@"
+    ;;
+  help | -h | --help)
+    help
+    ;;
+  *)
+    die "Unknown command: $CMD. Run: pod help"
+    ;;
+  esac
+}
+
+main "$@"

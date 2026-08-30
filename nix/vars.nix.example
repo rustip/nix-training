@@ -1,0 +1,5 @@
+{
+  username = "your_username";
+  homeDirectory = "/home/your_username";
+  hostname = "your_hostname"; # on a freshly installed nixos system, hostname is typically `nixos`
+}
