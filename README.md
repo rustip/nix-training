@@ -66,6 +66,21 @@ Edit `nix/home/home.nix` for user packages or `nix/nixos/core.nix` for system pa
 
 You could also add your own nix code to `nix/home/local.nix` for home manager config and to `nix/nixos/local.nix` for nixos config.
 
+### Changing Hostname
+
+The hostname is set in two places:
+
+1. `hostname` in `nix/vars.nix` — also names the flake output (`nixosConfigurations.<hostname>`)
+2. `networking.hostName` in `nix/host/configuration.nix`
+
+Update both to the new hostname, then rebuild with the new name (the bare `path:.#` uses the *current* hostname, which no longer matches a flake output):
+
+```bash
+sudo nixos-rebuild switch --flake path:.#<new-hostname>
+```
+
+Reboot your PC.
+
 ### Zed Editor
 
 Zed is managed declaratively through `nix/home/zed.nix` (Home Manager's `programs.zed-editor`). You cannot edit Zed's own settings file (`~/.config/zed/settings.json`). Instead, edit `userSettings` in `nix/home/zed.nix` and rebuild.
