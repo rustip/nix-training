@@ -3,7 +3,7 @@
     enable = true;
     extensions = [ "nix" ];
     userSettings = {
-      auto_save = true;
+      autosave = "on_focus_change";
       buffer_font_family = "JetBrainsMono Nerd Font";
       buffer_font_size = 14;
       theme = {
@@ -15,8 +15,7 @@
         font_family = "JetBrainsMono Nerd Font";
         font_size = 14;
       };
-      line_numbers = true;
-      cursor_blinking = true;
+      relative_line_numbers = "enabled";
       languages.Nix.language_servers = [
         "nixd"
         "!nil"
