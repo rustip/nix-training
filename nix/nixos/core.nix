@@ -80,6 +80,7 @@
     pstree
     udiskie
     udisks2
+    uv
     unzip
     wget
     wl-clipboard

@@ -212,6 +212,13 @@ main() {
     rebuild_nixos
   fi
 
+  # install python with uv
+  if uv python install 3.12 --default; then
+    log "python 3.12 installed as default. Use uv instead of pipx etc!"
+  else
+    warn "Couldn't install python with uv"
+  fi
+
   completion_info
 }
 
