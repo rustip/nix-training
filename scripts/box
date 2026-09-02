@@ -2,8 +2,24 @@
 
 set -euo pipefail
 
-IMAGE="docker.io/library/ubuntu:26.04"
+IMAGE="ghcr.io/ublue-os/debian-toolbox"
 BOXES_DIR="$HOME/.boxes"
+
+ADDITIONAL_PACKAGES=(
+  bat
+  eza
+  fd-find
+  fish
+  gh
+  ripgrep
+  sd
+  starship
+  tealdeer
+  tmux
+  trash-cli
+  tree
+  zoxide
+)
 
 readonly GREEN='\033[0;32m'
 readonly YELLOW='\033[0;33m'
@@ -36,6 +52,10 @@ box_exists() {
   list_boxes | grep -qx "$1"
 }
 
+container_name_exists() {
+  podman ps -a --format '{{.Names}}' 2>/dev/null | grep -qx "$1"
+}
+
 pick_box() {
   local boxes
   boxes=$(list_boxes)
@@ -65,15 +85,19 @@ cmd_create() {
   if box_exists "$name"; then
     die "Box '$name' already exists."
   fi
+  if container_name_exists "$name"; then
+    die "A non-distrobox podman container named '$name' exists. Remove it first: podman rm $name"
+  fi
 
   mkdir -p "$BOXES_DIR/$name"
+
   log "Creating box '$name' from $IMAGE with init..."
   distrobox create \
     --name "$name" \
     --image "$IMAGE" \
-    --init \
     --hostname "$name" \
     --home "$BOXES_DIR/$name" \
+    --additional-packages "${ADDITIONAL_PACKAGES[*]}" \
     --yes
   cmd_enter "$name" "$@"
 }
@@ -83,7 +107,7 @@ cmd_enter() {
   name=$(resolve_box "${1:-}") || exit 1
   [[ $# -gt 0 ]] && shift
   cd "$BOXES_DIR/$name" 2>/dev/null || die "Box home $BOXES_DIR/$name not found."
-  exec distrobox enter "$name" --clean-path "$@"
+  exec distrobox enter "$name" -nw --clean-path "$@"
 }
 
 cmd_list() {
