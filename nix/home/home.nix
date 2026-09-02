@@ -18,7 +18,6 @@
     delta
     devbox
     devenv
-    distrobox
     fd
     file
     gdu
@@ -52,5 +51,4 @@
     xh
     yq
   ];
-
 }
