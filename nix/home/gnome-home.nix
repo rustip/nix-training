@@ -57,8 +57,8 @@
     };
 
     "org/gnome/desktop/background" = {
-      picture-uri = "file:///run/current-system/sw/share/backgrounds/gnome/curvy-l.jxl";
-      picture-uri-dark = "file:///run/current-system/sw/share/backgrounds/gnome/curvy-l.jxl";
+      picture-uri = "file:///run/current-system/sw/share/backgrounds/gnome/curvy-d.jxl";
+      picture-uri-dark = "file:///run/current-system/sw/share/backgrounds/gnome/curvy-d.jxl";
     };
 
     "org/gnome/Ptyxis" = {
@@ -81,7 +81,8 @@
 
     "org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom0" = {
       name = "Terminal";
-      command = "ptyxis -s";
+      # command = "ptyxis -s";
+      command = "ghostty";
       binding = "<Super>Return";
     };
 
@@ -109,6 +110,7 @@
       winprops = [
         "{\"wm_class\":\"dev.zed.Zed\",\"preferredWidth\":\"67%\"}"
         "{\"wm_class\":\"org.gnome.Ptyxis\",\"preferredWidth\":\"33%\"}"
+        "{\"wm_class\":\"com.mitchellh.ghostty\",\"preferredWidth\":\"33%\"}"
         "{\"wm_class\":\"vicinae\",\"scratch_layer\":true}"
         "{\"wm_class\":\"*\",\"preferredWidth\":\"50%\"}"
       ];
