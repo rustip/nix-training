@@ -126,7 +126,7 @@ Codex
 
 ignore the error message about `.bashrc`
 ```bash
-curl -fsSL https://opencode.ai/install | bash
+curl -fsSL https://chatgpt.com/codex/install.sh | sh
 ```
 
 Claude Code
