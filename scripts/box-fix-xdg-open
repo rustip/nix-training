@@ -1,0 +1,112 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+readonly GREEN='\033[0;32m'
+readonly YELLOW='\033[0;33m'
+readonly RED='\033[0;31m'
+readonly NC='\033[0m'
+
+log() {
+  echo -e "${GREEN}$1${NC}"
+}
+
+warn() {
+  echo -e "${YELLOW}$1${NC}"
+}
+
+die() {
+  echo -e "${RED}Error: $1${NC}" >&2
+  exit 1
+}
+
+cmd_check() {
+  command -v "$1" &>/dev/null || die "'$1' is required but not found in PATH."
+}
+
+list_boxes() {
+  podman ps -a --filter label=manager=distrobox --format '{{.Names}}' 2>/dev/null ||
+    distrobox list --no-color 2>/dev/null | awk -F'|' 'NR>1 {gsub(/ /, "", $2); print $2}'
+}
+
+box_exists() {
+  list_boxes | grep -qx "$1"
+}
+
+pick_box() {
+  local boxes
+  boxes=$(list_boxes)
+  [[ -n "$boxes" ]] || die "No boxes found. Create one with: box create <name>"
+
+  if command -v fzf &>/dev/null && [[ -t 0 ]] && [[ -t 1 ]]; then
+    printf '%s\n' "$boxes" | fzf --height=40% --prompt="box> " --exit-0
+  else
+    printf '%s\n' "$boxes"
+    read -r -p "Select box: " choice
+    echo "$choice"
+  fi
+}
+
+inside_install() {
+  [[ $(id -u) -eq 0 ]] || die "--inside must run as root inside a box"
+  command -v host-spawn &>/dev/null || die "host-spawn not found in box (distrobox >= 1.7 provides it)"
+  host-spawn -h 2>&1 | grep -q cwd || die "host-spawn too old: missing -cwd flag"
+
+  cat >/usr/local/bin/xdg-open <<'EOF'
+#!/bin/sh
+cwd="${PWD#/run/host}"
+[ -n "$cwd" ] && [ "$cwd" != "$PWD" ] || cwd="${HOME#/run/host}"
+[ -n "$cwd" ] || cwd=/tmp
+exec host-spawn --no-pty -cwd "$cwd" xdg-open "$@"
+EOF
+  chmod 755 /usr/local/bin/xdg-open
+  log "Installed xdg-open host bridge in /usr/local/bin/xdg-open."
+}
+
+help() {
+  cat <<EOF
+Usage: box-fix-xdg-open [name]
+
+Install an xdg-open wrapper in a box that forwards URLs/files to the host
+browser, fixing links that silently do nothing in GUI apps (separate-home
+boxes get a container-only CWD like /run/host/home/<user>, which makes the
+flatpak host-spawn portal fail to chdir on the host).
+
+The box is picked with fzf when no name is given.
+Re-run after recreating a box (the wrapper lives in container storage).
+Test: distrobox enter <name> -- xdg-open https://example.com
+EOF
+}
+
+main() {
+  if [[ "${1:-}" == "--inside" ]]; then
+    shift
+    inside_install
+    return
+  fi
+
+  [[ -z "${container:-}" ]] && [[ ! -d /run/host ]] || die "run this on the host, not inside a box"
+  cmd_check distrobox
+
+  case "${1:-}" in
+  help | -h | --help)
+    help
+    return
+    ;;
+  esac
+
+  local name="${1:-}"
+  if [[ -n "$name" ]] && box_exists "$name"; then
+    :
+  else
+    name=$(pick_box) || exit 0
+    [[ -n "$name" ]] || exit 0
+  fi
+
+  local script
+  script=$(readlink -f "$0")
+  log "Fixing xdg-open in box '$name'..."
+  exec distrobox enter "$name" -- sudo bash "$script" --inside
+}
+
+main "$@"
