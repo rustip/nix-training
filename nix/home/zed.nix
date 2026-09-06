@@ -16,10 +16,15 @@
         font_size = 14;
       };
       relative_line_numbers = "enabled";
-      languages.Nix.language_servers = [
-        "nixd"
-        "!nil"
-      ];
+      languages = {
+        "Shell Script" = {
+          "tab_size" = 2;
+        };
+        Nix.language_servers = [
+          "nixd"
+          "!nil"
+        ];
+      };
       lsp.nixd.initialization_options.formatting.command = [ "nixfmt" ];
     };
   };
