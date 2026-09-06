@@ -1,3 +1,7 @@
+fish_add_path -g "$HOME/.local/bin" "$HOME/.opencode/bin" "$HOME/.codex/bin"
+
+status is-interactive; or return
+
 alias gst 'git status'
 alias gcm 'git commit -m'
 alias gp 'git push'
@@ -41,5 +45,3 @@ end
 if type -q direnv
     direnv hook fish | source
 end
-
-fish_add_path -g $HOME/.local/bin $HOME/.opencode/bin $HOME/.codex/bin $HOME/.nix-config/scripts
