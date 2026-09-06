@@ -3,16 +3,11 @@
 set -euo pipefail
 
 readonly GREEN='\033[0;32m'
-readonly YELLOW='\033[0;33m'
 readonly RED='\033[0;31m'
 readonly NC='\033[0m'
 
 log() {
   echo -e "${GREEN}$1${NC}"
-}
-
-warn() {
-  echo -e "${YELLOW}$1${NC}"
 }
 
 die() {
@@ -30,51 +25,63 @@ list_boxes() {
 }
 
 box_exists() {
-  list_boxes | grep -qx "$1"
+  local boxes
+  boxes=$(list_boxes) || die "Unable to list boxes."
+  grep -Fx -- "$1" <<<"$boxes" >/dev/null
 }
 
 pick_box() {
   local boxes
-  boxes=$(list_boxes)
+  boxes=$(list_boxes) || die "Unable to list boxes."
   [[ -n "$boxes" ]] || die "No boxes found. Create one with: box create <name>"
 
-  if command -v fzf &>/dev/null && [[ -t 0 ]] && [[ -t 1 ]]; then
-    printf '%s\n' "$boxes" | fzf --height=40% --prompt="box> " --exit-0
+  local choice
+  if command -v fzf &>/dev/null; then
+    choice=$(printf '%s\n' "$boxes" | fzf --height=20% --prompt="box> " --exit-0) || exit 0
   else
-    printf '%s\n' "$boxes"
-    read -r -p "Select box: " choice
-    echo "$choice"
+    printf '%s\n' "$boxes" >&2
+    read -r -p "Select box: " choice || return 0
   fi
+  choice=$(echo "$choice" | tr -d '\r\n')
+  echo "$choice"
 }
 
 inside_install() {
   [[ $(id -u) -eq 0 ]] || die "--inside must run as root inside a box"
   command -v host-spawn &>/dev/null || die "host-spawn not found in box (distrobox >= 1.7 provides it)"
-  host-spawn -h 2>&1 | grep -q cwd || die "host-spawn too old: missing -cwd flag"
+  local spawn_help
+  spawn_help=$(host-spawn --help 2>&1) || die "Unable to inspect host-spawn options."
+  [[ "$spawn_help" == *-cwd* ]] || die "host-spawn too old: missing -cwd flag"
 
-  cat >/usr/local/bin/xdg-open <<'EOF'
+  local dest="/usr/local/bin/xdg-open" temporary
+  mkdir -p /usr/local/bin
+  temporary=$(mktemp /usr/local/bin/.xdg-open.XXXXXX)
+  # Capture the path now: this local may be out of scope when EXIT runs.
+  # shellcheck disable=SC2064
+  trap "rm -f -- '$temporary'" EXIT
+  cat >"$temporary" <<'EOF'
 #!/bin/sh
-cwd="${PWD#/run/host}"
-[ -n "$cwd" ] && [ "$cwd" != "$PWD" ] || cwd="${HOME#/run/host}"
-[ -n "$cwd" ] || cwd=/tmp
+# Shared paths already match the host; strip only the host mount prefix.
+case "$PWD" in
+  /run/host) cwd=/ ;;
+  /run/host/*) cwd=${PWD#/run/host} ;;
+  *) cwd=$PWD ;;
+esac
 exec host-spawn --no-pty -cwd "$cwd" xdg-open "$@"
 EOF
-  chmod 755 /usr/local/bin/xdg-open
-  log "Installed xdg-open host bridge in /usr/local/bin/xdg-open."
+  chmod 755 "$temporary"
+  mv -f -- "$temporary" "$dest"
+  trap - EXIT
+  log "Installed xdg-open host bridge in $dest."
 }
 
 help() {
   cat <<EOF
 Usage: box-fix-xdg-open [name]
 
-Install an xdg-open wrapper in a box that forwards URLs/files to the host
-browser, fixing links that silently do nothing in GUI apps (separate-home
-boxes get a container-only CWD like /run/host/home/<user>, which makes the
-flatpak host-spawn portal fail to chdir on the host).
-
-The box is picked with fzf when no name is given.
-Re-run after recreating a box (the wrapper lives in container storage).
-Test: distrobox enter <name> -- xdg-open https://example.com
+Installs an xdg-open wrapper in a box that forwards URLs/files to the host
+browser. Selects a box interactively when no name is given.
+Requires sudo and host-spawn inside the box.
 EOF
 }
 
@@ -85,9 +92,6 @@ main() {
     return
   fi
 
-  [[ -z "${container:-}" ]] && [[ ! -d /run/host ]] || die "run this on the host, not inside a box"
-  cmd_check distrobox
-
   case "${1:-}" in
   help | -h | --help)
     help
@@ -95,18 +99,23 @@ main() {
     ;;
   esac
 
+  [[ $# -le 1 ]] || die "Usage: box-fix-xdg-open [name]"
+  [[ -z "${container:-}" ]] && [[ ! -d /run/host ]] || die "run this on the host, not inside a box"
+  cmd_check distrobox
+
   local name="${1:-}"
-  if [[ -n "$name" ]] && box_exists "$name"; then
-    :
-  else
-    name=$(pick_box) || exit 0
+  if [[ -z "$name" ]]; then
+    name=$(pick_box) || exit 1
     [[ -n "$name" ]] || exit 0
   fi
+  [[ "$name" != -* ]] || die "Invalid box name: $name"
+  box_exists "$name" || die "Box '$name' does not exist. Run: box list"
 
   local script
   script=$(readlink -f "$0")
   log "Fixing xdg-open in box '$name'..."
-  exec distrobox enter "$name" -- sudo bash "$script" --inside
+  # Stream the script because separate box homes may hide its host path.
+  exec distrobox enter "$name" -- sudo bash -s -- --inside <"$script"
 }
 
 main "$@"
