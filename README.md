@@ -29,36 +29,7 @@ This will:
 
 ### Manual Setup
 
-**Note**: You can just point your AI agent (Claude/Codex) to this README, and it should do everything for you.
-
-If you don't want to run the above script, or it does not work for your system, you can set up your system manually.
-
-```bash
-git clone https://github.com/rustip/nix-training.git ~/.nix-config
-cd ~/.nix-config
-mkdir -p nix/host
-cp /etc/nixos/* nix/host/
-```
-
-Create and edit `nix/vars.nix` in `~/.nix-config` with your username, home directory, and hostname. It should look like this:
-
-```nix
-{
-  username = "your_username";
-  homeDirectory = "/home/your_username";
-  hostname = "your_hostname"; # on a freshly installed NixOS system, the hostname is typically `nixos`
-}
-```
-
-`vars.nix` is useful for keeping Nix evaluations pure.
-
-Machine-specific files are intentionally ignored by Git. Use the explicit `path:` flake reference below so Nix includes them without staging or committing them.
-
-Rebuild the system
-
-```bash
-sudo nixos-rebuild switch --flake path:.#
-```
+See [docs/manual.md](docs/manual.md).
 
 ### Adding Packages
 
@@ -115,66 +86,14 @@ gh repo create nix-config --public --source=. --push
 
 ### AI Tools
 
-Install your AI tools the conventional way. These update often, so NixOS packages might not be the best solution.
-
-Opencode
-```bash
-curl -fsSL https://opencode.ai/install | bash
-```
-
-Codex
-
-ignore the error message about `.bashrc`
-```bash
-curl -fsSL https://chatgpt.com/codex/install.sh | sh
-```
-
-Claude Code
-```
-curl -fsSL https://claude.ai/install.sh | bash
-```
+See [docs/ai-tools.md](docs/ai-tools.md).
 
 ### Dev Containers
 
-There are two helper scripts in `scripts/` (already on your `PATH` after rebuild): `box` for integrated Ubuntu dev environments via [distrobox](https://distrobox.it/), and `pod` for grouped containers via [podman pods](https://docs.podman.io/en/latest/markdown/podman-pod.1.html).
-
 #### box
 
-Creates Ubuntu 26.04 [distrobox](https://distrobox.it/) containers with an init system, a per-box home at `~/.boxes/<name>`, its own hostname, and a clean `PATH` on enter.
-
-```bash
-box create mydev    # create (ubuntu:26.04, init, ~/.boxes/mydev) and enter it
-box enter mydev     # enter again (fzf picker if name omitted)
-box list            # list boxes
-box rm mydev        # remove box (fzf picker if name omitted)
-```
-
-Inside a box you get your host user, files, and flatpak/GUI app access — see the [distrobox docs](https://distrobox.it/) for details. Packages installed inside (`apt install ...`) persist in that box's home/container.
-
-#### box-setup
-
-Provisions a box from the host: adds extra apt sources, installs apps from the newest `.deb` in a repo's Packages index (e.g. Claude Desktop), installs local `.deb` files (staged through `/tmp` to avoid apt sandbox notices), and installs extra apt packages. Configure what it does in the arrays at the top of `scripts/box-setup`.
-
-```bash
-box-setup dev                                        # apply configured setup to box 'dev'
-box-setup dev ~/Downloads/chatgpt_amd64.deb          # also install a local .deb
-box-setup                                            # pick box with fzf
-```
-
-Running it again is safe; every step is idempotent.
+See [docs/box.md](docs/box.md).
 
 #### pod
 
-Kubectl-style workflow over [podman pods](https://docs.podman.io/en/latest/markdown/podman-pod.1.html) — groups of containers sharing a network namespace, useful for running a dev stack (app + db + cache).
-
-```bash
-pod new dev -p 8080:80                  # create pod, publish ports (args pass to podman)
-pod run dev docker.io/library/nginx:stable   # add a container (auto-named dev-nginx)
-pod run dev docker.io/library/postgres:18
-pod ps                                 # list pods
-pod logs dev nginx -f                   # follow logs (fzf pickers when names omitted)
-pod sh dev                              # shell into a container
-pod stop dev && pod rm dev              # teardown
-```
-
-See the official docs for more: [podman run](https://docs.podman.io/en/latest/markdown/podman-run.1.html), [podman pod create](https://docs.podman.io/en/latest/markdown/podman-pod-create.1.html).
+See [docs/pod.md](docs/pod.md).
