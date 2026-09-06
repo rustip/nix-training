@@ -37,6 +37,10 @@ Edit `nix/home/home.nix` for user packages or `nix/nixos/core.nix` for system pa
 
 You can also add your own Nix code to `nix/home/local.nix` for Home Manager config and to `nix/nixos/local.nix` for NixOS config.
 
+### Locale Setup
+
+See [Locale Setup](docs/locale.md) to configure `en_US.UTF-8` and apply the settings.
+
 ### Changing Hostname
 
 The hostname is set in two places:
