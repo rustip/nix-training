@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+if [[ $# -ne 1 || -z "$1" || "$1" == -* ]]; then
+  echo "Usage: box-fish-setup <box-name>" >&2
+  exit 1
+fi
+if [[ -n "${CONTAINER_ID:-}${container:-}" || -d /run/host ]]; then
+  echo "Run this script on the host." >&2
+  exit 1
+fi
+
+script_dir=$(dirname -- "$(readlink -f -- "$0")")
+# Send the config over stdin so separate container homes work too.
+# Expand variables inside the container, not in the host shell.
+# shellcheck disable=SC2016
+distrobox enter "$1" -- bash -c '
+  set -euo pipefail
+  fish_path=$(command -v fish)
+  username=$(id -un)
+  config_dir="${XDG_CONFIG_HOME:-$HOME/.config}/fish/conf.d"
+  mkdir -p "$config_dir"
+  cat > "$config_dir/custom.fish"
+  if [[ $(getent passwd "$username" | cut -d: -f7) != "$fish_path" ]]; then
+    sudo usermod --shell "$fish_path" "$username"
+  fi
+  echo "Fish configured. Re-enter the box to use it."
+' < "$script_dir/../custom.fish"
