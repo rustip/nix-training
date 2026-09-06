@@ -1,7 +1,12 @@
 { ... }: {
   programs.zed-editor = {
     enable = true;
-    extensions = [ "nix" ];
+    extensions = [
+      "nix"
+      "fish"
+      "nu"
+      "git-firefly"
+    ];
     userSettings = {
       autosave = "on_focus_change";
       buffer_font_family = "JetBrainsMono Nerd Font";
