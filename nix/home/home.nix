@@ -3,6 +3,7 @@
     "$HOME/.opencode/bin"
   ];
   imports = [
+    ./git.nix
     ./ghostty.nix
     ./zed.nix
     ./shell.nix
