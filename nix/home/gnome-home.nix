@@ -71,17 +71,16 @@
       picture-uri-dark = "file:///run/current-system/sw/share/backgrounds/gnome/curvy-d.jxl";
     };
 
-    "org/gnome/Ptyxis" = {
-      use-system-font = false;
-      interface-style = "system";
-      font-name = "JetBrainsMono Nerd Font 11";
-      default-profile-uuid = "4d1e6d22-4b5a-4f8e-9c1a-2b3c4d5e6f7a";
-    };
+    # "org/gnome/Ptyxis" = {
+    #   use-system-font = false;
+    #   interface-style = "system";
+    #   font-name = "JetBrainsMono Nerd Font 11";
+    #   default-profile-uuid = "4d1e6d22-4b5a-4f8e-9c1a-2b3c4d5e6f7a";
+    # };
 
-    "org/gnome/Ptyxis/Profiles/4d1e6d22-4b5a-4f8e-9c1a-2b3c4d5e6f7a" = {
-
-      palette = "Catppuccin Mocha";
-    };
+    # "org/gnome/Ptyxis/Profiles/4d1e6d22-4b5a-4f8e-9c1a-2b3c4d5e6f7a" = {
+    #   palette = "Catppuccin Mocha";
+    # };
 
     "org/gnome/settings-daemon/plugins/media-keys" = {
       custom-keybindings = [

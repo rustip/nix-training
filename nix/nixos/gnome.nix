@@ -6,7 +6,7 @@
     gnomeExtensions.user-themes
     gnomeExtensions.switcher
     gnomeExtensions.windownavigator
-    ptyxis
+    # ptyxis
   ];
 
   # services.gnome.core-apps.enable = false;
