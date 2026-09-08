@@ -73,6 +73,10 @@ sudo nixos-rebuild switch --flake path:.#
 
 Reboot your PC. This is necessary.
 
+### GitHub SSH Setup
+
+See [GitHub SSH Setup](docs/github-ssh.md) to authenticate with an SSH key and configure repository remotes.
+
 ### Using with Your Own Repository
 
 After initial setup, you may want to use this configuration with your own GitHub repository:

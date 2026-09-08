@@ -22,7 +22,6 @@
     fd
     file
     gdu
-    gh
     ghostty
     htop
     imagemagick
