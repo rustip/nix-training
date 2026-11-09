@@ -1,6 +1,6 @@
 { pkgs, ... }:
 {
-  # https://devenv.sh/languages/#rust
+  # https://devenv.sh/languages/rust/
   languages.rust = {
     enable = true;
     channel = "stable"; # or "nightly" / "beta" (via rust-overlay)
@@ -12,11 +12,16 @@
       "rust-analyzer"
       "rust-src"
     ];
+
+    # Faster linking: mold on Linux, lld on macOS.
+    mold.enable = pkgs.stdenv.hostPlatform.isLinux;
+    lld.enable = pkgs.stdenv.hostPlatform.isDarwin;
   };
 
   # Writes .devcontainer.json on `devenv shell`, so VS Code / `devcontainer up`
   # can open this project in a container running the same devenv shell.
   devcontainer.enable = true;
+  devcontainer.settings.customizations.vscode.extensions = [ ];
 
   packages = with pkgs; [
     cargo-watch
@@ -28,16 +33,31 @@
     lint.exec = "cargo clippy -- -D warnings";
   };
 
-  enterShell = ''
-    rustc --version
-    cargo --version
-  '';
+  # Print toolchain versions on shell startup.
+  # https://devenv.sh/tasks/#entershell--entertest
+  tasks."rust:versions" = {
+    exec = ''
+      rustc --version
+      cargo --version
+    '';
+    before = [ "devenv:enterShell" ];
+  };
 
-  enterTest = ''
-    cargo fmt --check
-    cargo clippy -- -D warnings
-    cargo test
-  '';
+  # fmt, clippy and tests run as tasks before `devenv:enterTest` (`devenv test`).
+  tasks = {
+    "rust:fmt-check" = {
+      exec = "cargo fmt --check";
+      before = [ "devenv:enterTest" ];
+    };
+    "rust:clippy" = {
+      exec = "cargo clippy -- -D warnings";
+      before = [ "devenv:enterTest" ];
+    };
+    "rust:test" = {
+      exec = "cargo test";
+      before = [ "devenv:enterTest" ];
+    };
+  };
 
   git-hooks.hooks = {
     rustfmt.enable = true;

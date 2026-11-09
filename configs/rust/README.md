@@ -4,7 +4,8 @@ Copy this folder to start a Rust project with a [devenv](https://devenv.sh) shel
 
 ```bash
 cp -r ~/.nix-config/configs/rust ~/my-project && cd ~/my-project
-devenv shell      # or `direnv allow` to load the shell automatically on cd
+git init        # required for the git hooks and `devenv test`
+devenv allow    # trust once; the shell then auto-activates on cd (`devenv hook`)
 cargo run
 ```
 
@@ -28,3 +29,5 @@ In VS Code, use "Dev Containers: Reopen in Container". Zed also reads the file.
 ## Toolchain
 
 To change the toolchain, set `channel` in `devenv.nix`, or add `version = "1.xx.0"` to pin a specific release. Rename the package in `Cargo.toml`.
+
+Builds link with mold on Linux and lld on macOS (`mold.enable` / `lld.enable` in `devenv.nix`).
