@@ -6,6 +6,12 @@
 }:
 let
   llm-agents = inputs.llm-agents.packages.${pkgs.stdenv.hostPlatform.system};
+  pkgs-unstable = inputs.nixpkgs-unstable.legacyPackages.${pkgs.stdenv.hostPlatform.system};
+
+  # The 2.x binary is named `opencode2`; expose it as `opencode`.
+  opencode = pkgs.runCommand "opencode" { } ''
+    install -Dm555 ${llm-agents.opencode2}/bin/opencode2 $out/bin/opencode
+  '';
 in
 {
   home.sessionPath = [
@@ -16,14 +22,12 @@ in
   home.stateVersion = "26.05";
 
   home.packages =
-    with pkgs;
-    [
+    (with pkgs; [
       bat
       btop
       delta
       devbox
       devcontainer
-      devenv
       fd
       file
       gdu
@@ -54,9 +58,13 @@ in
       tree-sitter
       xh
       yq
+    ])
+    ++ [
+      pkgs-unstable.devenv
     ]
     ++ (with llm-agents; [
       claude-code
       codex
-    ]);
+    ])
+    ++ [ opencode ];
 }

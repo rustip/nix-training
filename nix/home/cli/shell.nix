@@ -24,6 +24,9 @@ in
     bash = {
       enable = true;
       inherit shellAliases;
+      initExtra = ''
+        eval "$(devenv hook bash)"
+      '';
     };
     nushell = {
       enable = true;
@@ -32,6 +35,9 @@ in
     fish = {
       enable = true;
       inherit shellAliases;
+      interactiveShellInit = ''
+        devenv hook fish | source
+      '';
     };
 
     eza = {
@@ -72,14 +78,6 @@ in
 
     zoxide = {
       enable = true;
-      enableBashIntegration = true;
-      enableFishIntegration = true;
-      enableNushellIntegration = true;
-    };
-
-    direnv = {
-      enable = true;
-      nix-direnv.enable = true;
       enableBashIntegration = true;
       enableFishIntegration = true;
       enableNushellIntegration = true;
