@@ -1,7 +1,9 @@
+# Full NixOS config for the real machine. The test VM imports ./cli only.
 {
   imports = [
-    ./core.nix
-    ./distrobox.nix
+    ./cli
+    ./ui
+    ./hardware.nix
     ./local.nix
   ];
 }
