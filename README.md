@@ -33,9 +33,21 @@ See [docs/manual.md](docs/manual.md).
 
 ### Adding Packages
 
-Edit `nix/home/home.nix` for user packages or `nix/nixos/core.nix` for system packages.
+The config is split into `cli/` (terminal tools and services, also used by the test VM) and `ui/` (desktop apps and settings), for both NixOS (`nix/nixos/`) and Home Manager (`nix/home/`).
+
+- User packages: `nix/home/cli/home.nix` (CLI) or `nix/home/ui/apps.nix` (GUI).
+- System packages: `nix/nixos/cli/core.nix` (CLI) or `nix/nixos/ui/desktop.nix` (GUI).
+- Docker: `nix/nixos/cli/docker.nix`. Your user is in the `docker` group, so `docker` works without sudo after a rebuild and a re-login.
 
 You can also add your own Nix code to `nix/home/local.nix` for Home Manager config and to `nix/nixos/local.nix` for NixOS config.
+
+### Project Templates
+
+`configs/` holds starter configs for new projects. `configs/rust` is a [devenv](https://devenv.sh) Rust project; see [its README](configs/rust/README.md).
+
+### Testing in a VM
+
+Run `nix run path:.#vm` to boot the config in a headless VM, then connect with `ssh -p 2222 nixos@localhost`. See [docs/vm.md](docs/vm.md).
 
 ### Locale Setup
 
@@ -58,9 +70,9 @@ Reboot your PC.
 
 ### Zed Editor
 
-Zed is installed and configured declaratively via Home Manager's `programs.zed-editor` module in `nix/home/zed.nix`.
+Zed is installed and configured declaratively via Home Manager's `programs.zed-editor` module in `nix/home/ui/zed.nix`.
 
-Home Manager generates `~/.config/zed/settings.json` from the `userSettings` attribute set on every rebuild, so any manual edits you make to that file **will be overwritten**. Do not edit it directly. Instead, edit `userSettings` in `nix/home/zed.nix` and rebuild.
+Home Manager generates `~/.config/zed/settings.json` from the `userSettings` attribute set on every rebuild, so any manual edits you make to that file **will be overwritten**. Do not edit it directly. Instead, edit `userSettings` in `nix/home/ui/zed.nix` and rebuild.
 
 
 ### Rebuilding / Updating NixOS
